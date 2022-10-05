@@ -11,10 +11,9 @@ import (
 	"go.k6.io/k6/js/modules"
 )
 
-// Register the extension on module initialization, available to
-// import from JS as "k6/x/mongo".
+// init is called by the Go runtime at application startup.
 func init() {
-	modules.Register("k6/x/mongo", new(Mongo))
+	modules.Register("k6/x/mongo", new(RootModule))
 }
 
 type (
@@ -45,7 +44,7 @@ func (m *Mongo) Exports() modules.Exports {
 // XClient represents the Client constructor (i.e. `new mongo.Client()`) and
 // returns a new Mongo client object.
 // connURI -> mongodb://username:password@address:port/db?connect=direct
-func (m *Mongo) XClient(ctxPtr *context.Context, connURI string) (*mongo.Client, error) {
+func (m *Mongo) XClient(connURI string) (*mongo.Client, error) {
 	rt := m.vu.Runtime()
 	if connURI == "" {
 		common.Throw(rt, fmt.Errorf("url is required"))

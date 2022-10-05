@@ -11,6 +11,10 @@ import (
 	"go.k6.io/k6/js/modules"
 )
 
+func init() {
+	modules.Register("k6/x/timers", new(RootModule))
+}
+
 // RootModule is the global module instance that will create module
 // instances for each VU.
 type RootModule struct{}

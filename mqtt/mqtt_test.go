@@ -2,6 +2,7 @@
 package mqtt
 
 import (
+	"gopkg.in/guregu/null.v3"
 	"math/rand"
 	"testing"
 	"time"
