@@ -5,20 +5,22 @@ go 1.18
 replace github.com/gocql/gocql => github.com/scylladb/gocql v1.7.2
 
 require (
-	github.com/gocql/gocql v1.2.1
-	go.k6.io/k6 v0.40.0
-	github.com/denisenkom/go-mssqldb v0.12.0
+	github.com/denisenkom/go-mssqldb v0.12.2
 	github.com/go-sql-driver/mysql v1.6.0
-	github.com/lib/pq v1.10.4
-	github.com/mattn/go-sqlite3 v1.14.12
+	github.com/gocql/gocql v1.2.1
+	github.com/lib/pq v1.10.7
+	github.com/mattn/go-sqlite3 v1.14.15
+	go.k6.io/k6 v0.40.0
 
 )
 
 require (
 	github.com/dlclark/regexp2 v1.7.0 // indirect
-	github.com/dop251/goja v0.0.0-20220927172339-ea66e911853d // indirect
+	github.com/dop251/goja v0.0.0-20221003171542-5ea1285e6c91 // indirect
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.4-0.20211119122758-180fcef48034+incompatible // indirect
+	github.com/golang-sql/civil v0.0.0-20220223132316-b832511892a9 // indirect
+	github.com/golang-sql/sqlexp v0.1.0 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/hailocab/go-hostpool v0.0.0-20160125115350-e80d13ce29ed // indirect
@@ -31,6 +33,7 @@ require (
 	github.com/serenize/snaker v0.0.0-20201027110005-a7ad2135616e // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/spf13/afero v1.9.2 // indirect
+	golang.org/x/crypto v0.0.0-20220926161630-eccd6366d1be // indirect
 	golang.org/x/sys v0.0.0-20220928140112-f11e5e49a4ec // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20220922220347-f3bd1da661af // indirect

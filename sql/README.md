@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-# xk6-mongo
-xk6-mongo
-=======
 # xk6-sql
 
 This is a [k6](https://github.com/grafana/k6) extension using the
@@ -160,4 +156,3 @@ For those on Mac or Linux, the `docker-run.sh` script simplifies the command:
 ```shell
 ./docker-run.sh tests/sqlite3_test.js
 ```
->>>>>>> xk6-sql/master
