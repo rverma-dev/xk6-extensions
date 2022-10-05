@@ -42,7 +42,7 @@ func (m *Mongo) Exports() modules.Exports {
 }
 
 // XClient represents the Client constructor (i.e. `new mongo.Client()`) and
-// returns a new Mongo client object.
+// returns a new mongo.Client reference.
 // connURI -> mongodb://username:password@address:port/db?connect=direct
 func (m *Mongo) XClient(connURI string) (*mongo.Client, error) {
 	rt := m.vu.Runtime()
