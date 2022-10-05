@@ -13,7 +13,9 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
-examples/basic.js
+.idea/
+.vscode/
+.DS_Store
+
 k6
-.idea
-.vscode
+*.sqlite

@@ -1,4 +1,4 @@
-module github.com/rverma-nsl/xk6-cassandra
+module github.com/nslhb/xk6-extensions
 
 go 1.18
 
@@ -7,6 +7,10 @@ replace github.com/gocql/gocql => github.com/scylladb/gocql v1.7.2
 require (
 	github.com/gocql/gocql v1.2.1
 	go.k6.io/k6 v0.40.0
+	github.com/denisenkom/go-mssqldb v0.12.0
+	github.com/go-sql-driver/mysql v1.6.0
+	github.com/lib/pq v1.10.4
+	github.com/mattn/go-sqlite3 v1.14.12
 
 )
 
