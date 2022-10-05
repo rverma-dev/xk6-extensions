@@ -38,6 +38,25 @@ jobs:
           go install go.k6.io/xk6/cmd/xk6@latest
           xk6 build --with ${{ steps.module-name.outputs.Module }}=.
 
+#  //FIXME
+#  test-mqtt:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Run mqtt broker
+#        run: docker run -p 1883:1883 -e "DOCKER_VERNEMQ_ACCEPT_EULA=yes" -e DOCKER_VERNEMQ_ALLOW_ANONYMOUS=on --name vernemq -d vernemq/vernemq
+#
+#      - name: Go tests
+#        run: go test -race ./...
+#
+#      - name: Test from source
+#        run: xk6 build --with github.com/pmalhaire/xk6-mqtt=. && ./k6 run --vus 50 --duration 10s examples/test.js
+#
+#      - name: Test tls
+#        run: docker run -d -v $PWD/docker_conf/mosquitto:/conf --rm --name mosquitto_tls -p 8883:8883 eclipse-mosquitto mosquitto -c /conf/mosquitto-tls.conf
+#
+#      - name: Test tls from source
+#        run: xk6 run ./examples/test_ssl.js -i 1
+
   run-unit-tests:
     runs-on: ubuntu-latest
     steps:

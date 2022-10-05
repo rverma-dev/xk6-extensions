@@ -38,8 +38,8 @@ func (m *RootModule) NewModuleInstance(vu modules.VU) modules.Instance {
 	return &Mongo{vu: vu}
 }
 
-func (cql *Mongo) Exports() modules.Exports {
-	return modules.Exports{Default: cql}
+func (m *Mongo) Exports() modules.Exports {
+	return modules.Exports{Default: m}
 }
 
 // XClient represents the Client constructor (i.e. `new mongo.Client()`) and

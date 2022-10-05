@@ -1,0 +1,245 @@
+package mqtt
+
+import (
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/dop251/goja"
+	paho "github.com/eclipse/paho.mqtt.golang"
+	"github.com/mstoykov/k6-taskqueue-lib/taskqueue"
+	"go.k6.io/k6/js/common"
+	"go.k6.io/k6/js/modules"
+)
+
+type client struct {
+	vu         modules.VU
+	metrics    *mqttMetrics
+	conf       conf
+	pahoClient paho.Client
+	obj        *goja.Object // the object that is given to js to interact with the WebSocket
+
+	// listeners
+	// this return goja.value *and* error in order to return error on exception instead of panic
+	// https://pkg.go.dev/github.com/dop251/goja#hdr-Functions
+	messageListener func(goja.Value) (goja.Value, error)
+	errorListener   func(goja.Value) (goja.Value, error)
+	tq              *taskqueue.TaskQueue
+	messageChan     chan paho.Message
+	subRefCount     int
+}
+
+type conf struct {
+	// The list of URL of  MQTT server to connect to
+	servers []string
+	// A username to authenticate to the MQTT server
+	user string
+	// Password to match username
+	password string
+	// clean session setting
+	cleansess bool
+	// Client id for reader
+	clientid string
+	// timeout ms
+	timeout uint
+	// path to caRoot path
+	caRootPath string
+	// path to client cert file
+	clientCertPath string
+	// path to client cert key file
+	clientCertKeyPath string
+}
+
+//nolint:nosnakecase // their choice not mine
+func (m *MqttAPI) client(c goja.ConstructorCall) *goja.Object {
+	serversArray := c.Argument(0)
+	rt := m.vu.Runtime()
+	if serversArray == nil || goja.IsUndefined(serversArray) {
+		common.Throw(rt, errors.New("Client requires a server list"))
+	}
+	var servers []string
+	var clientConf conf
+	err := rt.ExportTo(serversArray, &servers)
+	if err != nil {
+		common.Throw(rt,
+			fmt.Errorf("Client requires valid server list, but got %q which resulted in %w", serversArray, err))
+	}
+	clientConf.servers = servers
+	userValue := c.Argument(1)
+	if userValue == nil || goja.IsUndefined(userValue) {
+		common.Throw(rt, errors.New("Client requires a user value"))
+	}
+	clientConf.user = userValue.String()
+	passwordValue := c.Argument(2)
+	if userValue == nil || goja.IsUndefined(passwordValue) {
+		common.Throw(rt, errors.New("Client requires a password value"))
+	}
+	clientConf.password = passwordValue.String()
+	cleansessValue := c.Argument(3)
+	if cleansessValue == nil || goja.IsUndefined(cleansessValue) {
+		common.Throw(rt, errors.New("Client requires a cleaness value"))
+	}
+	clientConf.cleansess = cleansessValue.ToBoolean()
+
+	clientIDValue := c.Argument(4)
+	if clientIDValue == nil || goja.IsUndefined(clientIDValue) {
+		common.Throw(rt, errors.New("Client requires a clientID value"))
+	}
+	clientConf.clientid = clientIDValue.String()
+
+	timeoutValue := c.Argument(5)
+	if timeoutValue == nil || goja.IsUndefined(timeoutValue) {
+		common.Throw(rt, errors.New("Client requires a timeout value"))
+	}
+	clientConf.timeout = uint(timeoutValue.ToInteger())
+
+	// optional args
+	if caRootPathValue := c.Argument(6); caRootPathValue == nil || goja.IsUndefined(caRootPathValue) {
+		clientConf.caRootPath = ""
+	} else {
+		clientConf.caRootPath = caRootPathValue.String()
+	}
+	if clientCertPathValue := c.Argument(7); clientCertPathValue == nil || goja.IsUndefined(clientCertPathValue) {
+		clientConf.clientCertPath = ""
+	} else {
+		clientConf.clientCertPath = clientCertPathValue.String()
+	}
+	if clientCertKeyPathValue := c.Argument(8); clientCertKeyPathValue == nil || goja.IsUndefined(clientCertKeyPathValue) {
+		clientConf.clientCertKeyPath = ""
+	} else {
+		clientConf.clientCertKeyPath = clientCertKeyPathValue.String()
+	}
+
+	client := &client{
+		vu:      m.vu,
+		metrics: &m.metrics,
+		conf:    clientConf,
+		obj:     rt.NewObject(),
+	}
+	must := func(err error) {
+		if err != nil {
+			common.Throw(rt, err)
+		}
+	}
+
+	// TODO add onmessage,onclose and so on
+	must(client.obj.DefineDataProperty(
+		"addEventListener", rt.ToValue(client.AddEventListener), goja.FLAG_FALSE, goja.FLAG_FALSE, goja.FLAG_TRUE))
+	must(client.obj.DefineDataProperty(
+		"subContinue", rt.ToValue(client.SubContinue), goja.FLAG_FALSE, goja.FLAG_FALSE, goja.FLAG_TRUE))
+	must(client.obj.DefineDataProperty(
+		"connect", rt.ToValue(client.Connect), goja.FLAG_FALSE, goja.FLAG_FALSE, goja.FLAG_TRUE))
+	must(client.obj.DefineDataProperty(
+		"isConnected", rt.ToValue(client.IsConnected), goja.FLAG_FALSE, goja.FLAG_FALSE, goja.FLAG_TRUE))
+	must(client.obj.DefineDataProperty(
+		"publish", rt.ToValue(client.Publish), goja.FLAG_FALSE, goja.FLAG_FALSE, goja.FLAG_TRUE))
+	must(client.obj.DefineDataProperty(
+		"subscribe", rt.ToValue(client.Subscribe), goja.FLAG_FALSE, goja.FLAG_FALSE, goja.FLAG_TRUE))
+
+	must(client.obj.DefineDataProperty(
+		"close", rt.ToValue(client.Close), goja.FLAG_FALSE, goja.FLAG_FALSE, goja.FLAG_TRUE))
+
+	return client.obj
+}
+
+// Connect create a connection to mqtt
+func (c *client) Connect() error {
+	opts := paho.NewClientOptions()
+
+	var tlsConfig *tls.Config
+	// Use root CA if specified
+	if len(c.conf.caRootPath) > 0 {
+		mqttTLSCA, err := os.ReadFile(c.conf.caRootPath)
+		if err != nil {
+			panic(err)
+		}
+		rootCA := x509.NewCertPool()
+		loadCA := rootCA.AppendCertsFromPEM(mqttTLSCA)
+		if !loadCA {
+			panic("failed to parse root certificate")
+		}
+		tlsConfig = &tls.Config{
+			RootCAs:    rootCA,
+			MinVersion: tls.VersionTLS13,
+		}
+	}
+	// Use local cert if specified
+	if len(c.conf.clientCertPath) > 0 {
+		cert, err := tls.LoadX509KeyPair(c.conf.clientCertPath, c.conf.clientCertKeyPath)
+		if err != nil {
+			panic("failed to parse client certificate")
+		}
+		if tlsConfig != nil {
+			tlsConfig.Certificates = []tls.Certificate{cert}
+		} else {
+			tlsConfig = &tls.Config{
+				Certificates: []tls.Certificate{cert},
+				MinVersion:   tls.VersionTLS13,
+			}
+		}
+	}
+	if tlsConfig != nil {
+		opts.SetTLSConfig(tlsConfig)
+	}
+	for i := range c.conf.servers {
+		opts.AddBroker(c.conf.servers[i])
+	}
+	opts.SetClientID(c.conf.clientid)
+	opts.SetUsername(c.conf.user)
+	opts.SetPassword(c.conf.password)
+	opts.SetCleanSession(c.conf.cleansess)
+	client := paho.NewClient(opts)
+	token := client.Connect()
+	rt := c.vu.Runtime()
+	if !token.WaitTimeout(time.Duration(c.conf.timeout) * time.Millisecond) {
+		common.Throw(rt, ErrTimeout)
+		return ErrTimeout
+	}
+	if token.Error() != nil {
+		common.Throw(rt, token.Error())
+		return token.Error()
+	}
+	c.pahoClient = client
+	return nil
+}
+
+// Close the given client
+// wait for pending connections for timeout (ms) before closing
+func (c *client) Close() {
+	// exit subscribe task queue if running
+	if c.tq != nil {
+		c.tq.Close()
+	}
+	// disconnect client
+	if c.pahoClient != nil && c.pahoClient.IsConnected() {
+		c.pahoClient.Disconnect(c.conf.timeout)
+	}
+}
+
+// IsConnected the given client
+func (c *client) IsConnected() bool {
+	if c.pahoClient == nil || !c.pahoClient.IsConnected() {
+		return false
+	}
+	return true
+}
+
+// error event for async
+//
+//nolint:nosnakecase // their choice not mine
+func (c *client) newErrorEvent(msg string) *goja.Object {
+	rt := c.vu.Runtime()
+	o := rt.NewObject()
+	must := func(err error) {
+		if err != nil {
+			common.Throw(rt, err)
+		}
+	}
+
+	must(o.DefineDataProperty("type", rt.ToValue("error"), goja.FLAG_FALSE, goja.FLAG_FALSE, goja.FLAG_TRUE))
+	must(o.DefineDataProperty("message", rt.ToValue(msg), goja.FLAG_FALSE, goja.FLAG_FALSE, goja.FLAG_TRUE))
+	return o
+}
