@@ -1,6 +1,6 @@
 module github.com/nslhb/xk6-extensions/timers
 
-go 1.19
+go 1.18
 
 require (
 	github.com/dop251/goja v0.0.0-20221003171542-5ea1285e6c91

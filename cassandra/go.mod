@@ -1,6 +1,6 @@
 module github.com/nslhb/xk6-extensions/cassandra
 
-go 1.19
+go 1.18
 
 replace github.com/gocql/gocql => github.com/scylladb/gocql v1.7.2
 
